@@ -22,7 +22,11 @@ import java.util.List;
 import static org.monte.media.FormatKeys.*;
 import static org.monte.media.VideoFormatKeys.*;
 
-public class ScreenRecorderHelper {
+/**
+ * Thread-safe helper for capturing screenshots and recording screen videos.
+ * Videos are only kept for failed tests to save disk space.
+ */
+public final class ScreenRecorderHelper {
 
     private static final String SCREENSHOT_DIR = "target/screenshots";
     private static final String VIDEO_DIR = "target/videos";
@@ -30,7 +34,11 @@ public class ScreenRecorderHelper {
     private static final ThreadLocal<ScreenRecorder> screenRecorder = new ThreadLocal<>();
     private static final ThreadLocal<String> currentVideoName = new ThreadLocal<>();
 
-    // ===================== SCREENSHOT =====================
+    private ScreenRecorderHelper() {
+        // Utility class — prevent instantiation
+    }
+
+    // ═══════════════════════ SCREENSHOT ═══════════════════════
 
     @Attachment(value = "Screenshot: {testName}", type = "image/png")
     public static byte[] captureScreenshot(WebDriver driver, String testName) {
@@ -40,7 +48,7 @@ public class ScreenRecorderHelper {
 
     public static String saveScreenshotToFile(WebDriver driver, String testName) {
         try {
-            createDirectory(SCREENSHOT_DIR);
+            ensureDirectory(SCREENSHOT_DIR);
 
             byte[] screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
             String fileName = buildFileName(testName, "png");
@@ -54,11 +62,11 @@ public class ScreenRecorderHelper {
         }
     }
 
-    // ===================== VIDEO RECORDING =====================
+    // ═══════════════════════ VIDEO RECORDING ═══════════════════════
 
     public static void startRecording(String testName) {
         try {
-            createDirectory(VIDEO_DIR);
+            ensureDirectory(VIDEO_DIR);
 
             File videoDir = new File(VIDEO_DIR);
             Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
@@ -66,8 +74,7 @@ public class ScreenRecorderHelper {
 
             Format fileFormat = new Format(
                     MediaTypeKey, FormatKeys.MediaType.FILE,
-                    MimeTypeKey, MIME_AVI
-            );
+                    MimeTypeKey, MIME_AVI);
 
             Format screenFormat = new Format(
                     MediaTypeKey, FormatKeys.MediaType.VIDEO,
@@ -76,71 +83,47 @@ public class ScreenRecorderHelper {
                     DepthKey, 24,
                     FrameRateKey, Rational.valueOf(15),
                     QualityKey, 1.0f,
-                    KeyFrameIntervalKey, 15 * 60
-            );
+                    KeyFrameIntervalKey, 15 * 60);
 
             Format mouseFormat = new Format(
                     MediaTypeKey, FormatKeys.MediaType.VIDEO,
                     EncodingKey, "black",
-                    FrameRateKey, Rational.valueOf(30)
-            );
+                    FrameRateKey, Rational.valueOf(30));
 
             ScreenRecorder recorder = new ScreenRecorder(
-                    GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration(),
-                    captureArea,
-                    fileFormat,
-                    screenFormat,
-                    mouseFormat,
-                    null,
-                    videoDir
-            );
+                    GraphicsEnvironment.getLocalGraphicsEnvironment()
+                            .getDefaultScreenDevice().getDefaultConfiguration(),
+                    captureArea, fileFormat, screenFormat, mouseFormat, null, videoDir);
 
             recorder.start();
             screenRecorder.set(recorder);
-            String newFileName = buildFileName(testName, "avi");
-            currentVideoName.set(newFileName);
-            LogHelper.info("Started video recording: " + newFileName);
+            currentVideoName.set(buildFileName(testName, "avi"));
+            LogHelper.info("Started video recording: " + currentVideoName.get());
 
         } catch (Exception e) {
             LogHelper.error("Failed to start recording: " + testName, e);
         }
     }
 
-    public static void stopRecording(String testName, boolean isFailed) {
+    public static void stopRecording(String testName, boolean keepVideo) {
         try {
             ScreenRecorder recorder = screenRecorder.get();
-            if (recorder == null) {
-                return;
-            }
+            if (recorder == null) return;
 
             recorder.stop();
 
             List<File> createdFiles = recorder.getCreatedMovieFiles();
-            if (createdFiles.isEmpty()) {
-                return;
-            }
+            if (createdFiles.isEmpty()) return;
 
             File recordedFile = createdFiles.get(createdFiles.size() - 1);
-            String targetFileName = currentVideoName.get();
-            File renamedFile = new File(VIDEO_DIR, targetFileName);
+            File renamedFile = new File(VIDEO_DIR, currentVideoName.get());
+            File targetFile = recordedFile.renameTo(renamedFile) ? renamedFile : recordedFile;
 
-            if (recordedFile.renameTo(renamedFile)) {
-                if (isFailed) {
-                    attachVideoToAllure(renamedFile);
-                } else {
-                    // Xóa video nếu test pass để tiết kiệm dung lượng
-                    if (renamedFile.exists()) {
-                        renamedFile.delete();
-                    }
-                }
+            if (keepVideo) {
+                attachVideoToAllure(targetFile);
             } else {
-                 if (isFailed) {
-                     attachVideoToAllure(recordedFile);
-                 } else {
-                     if (recordedFile.exists()) {
-                         recordedFile.delete();
-                     }
-                 }
+                // Delete video for passing tests to save disk space
+                targetFile.delete();
             }
         } catch (Exception e) {
             LogHelper.error("Failed to stop recording: " + testName, e);
@@ -149,6 +132,8 @@ public class ScreenRecorderHelper {
             currentVideoName.remove();
         }
     }
+
+    // ═══════════════════════ PRIVATE ═══════════════════════
 
     @Attachment(value = "Video on Failure", type = "video/avi")
     private static byte[] attachVideoToAllure(File videoFile) {
@@ -163,9 +148,7 @@ public class ScreenRecorderHelper {
         }
     }
 
-    // ===================== UTILITY =====================
-
-    private static void createDirectory(String dirPath) {
+    private static void ensureDirectory(String dirPath) {
         File dir = new File(dirPath);
         if (!dir.exists()) {
             dir.mkdirs();

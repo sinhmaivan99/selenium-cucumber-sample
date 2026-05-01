@@ -9,13 +9,24 @@ import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import utils.LogHelper;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.function.Supplier;
 
+/**
+ * Base class for all Page Objects.
+ * Provides 30+ reusable DOM interaction methods with built-in:
+ * - Explicit waits (visibility, clickability, presence)
+ * - Automatic retry for StaleElement and ClickIntercepted exceptions
+ * - Allure step logging
+ * - JavaScript execution helpers
+ */
 public class BasePage {
 
     protected WebDriver driver;
     protected WebDriverWait wait;
     private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 500;
 
     public BasePage(WebDriver driver, WebDriverWait wait) {
         this.driver = driver;
@@ -23,13 +34,14 @@ public class BasePage {
         PageFactory.initElements(driver, this);
     }
 
+    // ═══════════════════════ WAIT METHODS ═══════════════════════
+
     protected WebElement waitForVisible(WebElement element) {
         return wait.until(ExpectedConditions.visibilityOf(element));
     }
 
     protected WebElement waitForVisible(WebElement element, int timeoutSeconds) {
-        WebDriverWait customWait = new WebDriverWait(driver, java.time.Duration.ofSeconds(timeoutSeconds));
-        return customWait.until(ExpectedConditions.visibilityOf(element));
+        return createWait(timeoutSeconds).until(ExpectedConditions.visibilityOf(element));
     }
 
     protected WebElement waitForVisible(By locator) {
@@ -37,8 +49,7 @@ public class BasePage {
     }
 
     protected WebElement waitForVisible(By locator, int timeoutSeconds) {
-        WebDriverWait customWait = new WebDriverWait(driver, java.time.Duration.ofSeconds(timeoutSeconds));
-        return customWait.until(ExpectedConditions.visibilityOfElementLocated(locator));
+        return createWait(timeoutSeconds).until(ExpectedConditions.visibilityOfElementLocated(locator));
     }
 
     protected WebElement waitForClickable(WebElement element) {
@@ -69,20 +80,40 @@ public class BasePage {
         wait.until(ExpectedConditions.titleContains(titlePart));
     }
 
+    // ═══════════════════════ RETRY LOGIC ═══════════════════════
+
+    /**
+     * Retries a void operation up to MAX_RETRIES times on transient failures.
+     */
     private void retryOperation(Runnable operation, String operationName) {
-        int attempts = 0;
-        while (attempts < MAX_RETRIES) {
+        retrySupplier(() -> {
+            operation.run();
+            return null;
+        }, operationName);
+    }
+
+    /**
+     * Retries an operation that returns a value up to MAX_RETRIES times.
+     */
+    @SuppressWarnings("SameParameterValue")
+    private <T> T retrySupplier(Supplier<T> operation, String operationName) {
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                operation.run();
-                return;
+                return operation.get();
             } catch (StaleElementReferenceException | ElementClickInterceptedException e) {
-                LogHelper.warn(operationName + " failed due to " + e.getClass().getSimpleName() + ". Retrying... (" + (attempts + 1) + "/" + MAX_RETRIES + ")");
-                attempts++;
-                try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+                LogHelper.warn(operationName + " failed: " + e.getClass().getSimpleName()
+                        + " — retry " + attempt + "/" + MAX_RETRIES);
+                if (attempt == MAX_RETRIES) {
+                    throw new RuntimeException("Failed: " + operationName
+                            + " after " + MAX_RETRIES + " retries", e);
+                }
+                sleep(RETRY_DELAY_MS);
             }
         }
-        throw new RuntimeException("Failed to perform " + operationName + " after " + MAX_RETRIES + " attempts.");
+        throw new RuntimeException("Failed: " + operationName + " — unexpected exit");
     }
+
+    // ═══════════════════════ CLICK & INPUT ═══════════════════════
 
     @Step("Click on element")
     protected void click(WebElement element) {
@@ -127,14 +158,14 @@ public class BasePage {
     }
 
     protected void pressEnter(WebElement element) {
-        LogHelper.info("Pressing ENTER");
-        element.sendKeys(Keys.ENTER);
+        pressKey(element, Keys.ENTER);
     }
 
     protected void pressTab(WebElement element) {
-        LogHelper.info("Pressing TAB");
-        element.sendKeys(Keys.TAB);
+        pressKey(element, Keys.TAB);
     }
+
+    // ═══════════════════════ CHECKBOX & DROPDOWN ═══════════════════════
 
     @Step("Set checkbox to: {checked}")
     protected void setCheckbox(WebElement checkbox, boolean checked) {
@@ -167,6 +198,8 @@ public class BasePage {
         return new Select(waitForVisible(dropdown)).getFirstSelectedOption().getText();
     }
 
+    // ═══════════════════════ GETTERS ═══════════════════════
+
     protected String getText(WebElement element) {
         return waitForVisible(element).getText().trim();
     }
@@ -190,6 +223,8 @@ public class BasePage {
     public String getCurrentUrl() {
         return driver.getCurrentUrl();
     }
+
+    // ═══════════════════════ STATE CHECKS ═══════════════════════
 
     protected boolean isDisplayed(WebElement element) {
         try {
@@ -219,6 +254,8 @@ public class BasePage {
         return element.isSelected();
     }
 
+    // ═══════════════════════ MOUSE ACTIONS ═══════════════════════
+
     protected void hoverElement(WebElement element) {
         LogHelper.info("Hovering over element");
         new Actions(driver).moveToElement(waitForVisible(element)).perform();
@@ -239,26 +276,30 @@ public class BasePage {
         new Actions(driver).dragAndDrop(source, target).perform();
     }
 
+    // ═══════════════════════ JAVASCRIPT ═══════════════════════
+
     protected void scrollToElement(WebElement element) {
         LogHelper.info("Scrolling to element");
-        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", element);
+        executeJs("arguments[0].scrollIntoView(true);", element);
     }
 
     @Step("Click on element using JS")
     protected void clickByJs(WebElement element) {
         LogHelper.info("Clicking element via JS");
-        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+        executeJs("arguments[0].click();", element);
     }
 
     @Step("Set text: {text} using JS")
     protected void setTextByJs(WebElement element, String text) {
         LogHelper.info("Setting text via JS: " + text);
-        ((JavascriptExecutor) driver).executeScript("arguments[0].value=arguments[1];", element, text);
+        executeJs("arguments[0].value=arguments[1];", element, text);
     }
 
     protected Object executeJs(String script, Object... args) {
         return ((JavascriptExecutor) driver).executeScript(script, args);
     }
+
+    // ═══════════════════════ ALERTS ═══════════════════════
 
     @Step("Accept alert")
     protected void acceptAlert() {
@@ -278,6 +319,8 @@ public class BasePage {
         wait.until(ExpectedConditions.alertIsPresent());
         return driver.switchTo().alert().getText();
     }
+
+    // ═══════════════════════ FRAMES ═══════════════════════
 
     protected void switchToFrame(WebElement frame) {
         LogHelper.info("Switching to frame");
@@ -299,6 +342,8 @@ public class BasePage {
         driver.switchTo().defaultContent();
     }
 
+    // ═══════════════════════ WINDOWS ═══════════════════════
+
     protected String getWindowHandle() {
         return driver.getWindowHandle();
     }
@@ -319,6 +364,8 @@ public class BasePage {
         }
     }
 
+    // ═══════════════════════ ELEMENTS ═══════════════════════
+
     protected List<WebElement> findElements(By locator) {
         return driver.findElements(locator);
     }
@@ -326,6 +373,8 @@ public class BasePage {
     protected int countElements(By locator) {
         return driver.findElements(locator).size();
     }
+
+    // ═══════════════════════ NAVIGATION ═══════════════════════
 
     @Step("Navigate to: {url}")
     protected void navigateTo(String url) {
@@ -351,6 +400,21 @@ public class BasePage {
     @Step("Wait for page load to complete")
     public void waitForPageLoad() {
         LogHelper.info("Waiting for page load to complete");
-        wait.until(webDriver -> ((JavascriptExecutor) webDriver).executeScript("return document.readyState").equals("complete"));
+        wait.until(webDriver -> ((JavascriptExecutor) webDriver)
+                .executeScript("return document.readyState").equals("complete"));
+    }
+
+    // ═══════════════════════ UTILITY ═══════════════════════
+
+    private WebDriverWait createWait(int timeoutSeconds) {
+        return new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+    }
+
+    private void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

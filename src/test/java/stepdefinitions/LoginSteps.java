@@ -9,6 +9,10 @@ import org.testng.Assert;
 import pages.LoginPage;
 import utils.DataHelper;
 
+/**
+ * Cucumber step definitions for Login feature.
+ * Uses lazy initialization for LoginPage to ensure DriverFactory is ready.
+ */
 public class LoginSteps {
 
     private LoginPage loginPage;
@@ -27,33 +31,41 @@ public class LoginSteps {
 
     @When("I login with valid email and password")
     public void iLoginWithValidEmailAndPassword() {
-        getLoginPage().performLogin(DataHelper.get("login.validEmail"), DataHelper.get("login.validPassword"));
+        getLoginPage().performLogin(
+                DataHelper.get("login.validEmail"),
+                DataHelper.get("login.validPassword"));
     }
 
     @When("I login with email {string} and password {string}")
     public void iLoginWithEmailAndPassword(String email, String password) {
-        if (!email.isEmpty()) getLoginPage().enterEmail(email);
-        if (!password.isEmpty()) getLoginPage().enterPassword(password);
-        getLoginPage().clickLogin();
+        LoginPage page = getLoginPage();
+        if (!email.isEmpty()) page.enterEmail(email);
+        if (!password.isEmpty()) page.enterPassword(password);
+        page.clickLogin();
     }
 
     @Then("I should be redirected to the dashboard")
     public void iShouldBeRedirectedToTheDashboard() {
-        Assert.assertTrue(getLoginPage().isDashboardDisplayed(), "Dashboard is not displayed");
-        Assert.assertTrue(getLoginPage().getCurrentUrl().contains(DataHelper.get("urls.dashboard")), "URL does not contain dashboard");
+        LoginPage page = getLoginPage();
+        Assert.assertTrue(page.isDashboardDisplayed(),
+                "Dashboard is not displayed");
+        Assert.assertTrue(page.getCurrentUrl().contains(DataHelper.get("urls.dashboard")),
+                "URL does not contain dashboard path");
     }
 
     @And("the dashboard title should contain {string}")
     public void theDashboardTitleShouldContain(String title) {
-        Assert.assertTrue(getLoginPage().getPageTitle().contains(title), "Title does not contain: " + title);
+        Assert.assertTrue(getLoginPage().getPageTitle().contains(title),
+                "Title does not contain: " + title);
     }
 
     @Then("I should see an error message or stay on the login page")
     public void iShouldSeeAnErrorMessageOrStayOnTheLoginPage() {
-        // If the URL is still the login page, or an error message is displayed
-        boolean isErrorDisplayed = getLoginPage().isErrorMessageDisplayed();
-        boolean isStillOnLoginPage = getLoginPage().getCurrentUrl().contains("authentication");
-        
-        Assert.assertTrue(isErrorDisplayed || isStillOnLoginPage, "Expected to see an error message or stay on the login page");
+        LoginPage page = getLoginPage();
+        boolean isErrorDisplayed = page.isErrorMessageDisplayed();
+        boolean isStillOnLoginPage = page.getCurrentUrl().contains("authentication");
+
+        Assert.assertTrue(isErrorDisplayed || isStillOnLoginPage,
+                "Expected to see an error message or stay on the login page");
     }
 }

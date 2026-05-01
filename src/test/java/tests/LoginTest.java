@@ -9,6 +9,10 @@ import org.testng.annotations.Test;
 import pages.LoginPage;
 import utils.DataHelper;
 
+/**
+ * TestNG test class for CRM Login functionality.
+ * Uses Data-Driven Testing (DDT) via @DataProvider for negative cases.
+ */
 @Epic("CRM Application")
 @Feature("Login")
 public class LoginTest extends BaseTest {
@@ -19,102 +23,121 @@ public class LoginTest extends BaseTest {
         return loginPage;
     }
 
-    @Test(priority = 1, description = "TC01 - Đăng nhập thành công với thông tin hợp lệ")
+    // ═══════════════════════ POSITIVE TESTS ═══════════════════════
+
+    @Test(priority = 1, description = "TC01 — Login successfully with valid credentials")
+    @Severity(SeverityLevel.BLOCKER)
     public void testLoginSuccess() {
         LoginPage loginPage = getLoginPage();
-        loginPage.performLogin(DataHelper.get("login.validEmail"), DataHelper.get("login.validPassword"));
+        loginPage.performLogin(
+                DataHelper.get("login.validEmail"),
+                DataHelper.get("login.validPassword"));
 
         Assert.assertTrue(loginPage.isDashboardDisplayed(),
-                "Dashboard không hiển thị sau khi đăng nhập thành công");
+                "Dashboard should be displayed after successful login");
         Assert.assertTrue(loginPage.getCurrentUrl().contains(DataHelper.get("urls.dashboard")),
-                "URL không chuyển hướng đến Dashboard");
+                "URL should redirect to Dashboard");
     }
 
-    @Test(priority = 2, description = "TC02 - Kiểm tra title trang Dashboard sau login thành công")
+    @Test(priority = 2, description = "TC02 — Verify Dashboard title after login")
+    @Severity(SeverityLevel.NORMAL)
     public void testDashboardTitleAfterLogin() {
         LoginPage loginPage = getLoginPage();
-        loginPage.performLogin(DataHelper.get("login.validEmail"), DataHelper.get("login.validPassword"));
+        loginPage.performLogin(
+                DataHelper.get("login.validEmail"),
+                DataHelper.get("login.validPassword"));
 
-        Assert.assertTrue(loginPage.isDashboardDisplayed(), "Dashboard không hiển thị");
+        Assert.assertTrue(loginPage.isDashboardDisplayed(),
+                "Dashboard should be displayed");
         Assert.assertTrue(loginPage.getPageTitle().contains("Dashboard"),
-                "Title trang không chứa 'Dashboard'");
+                "Page title should contain 'Dashboard'");
     }
+
+    // ═══════════════════════ NEGATIVE TESTS (DDT) ═══════════════════════
 
     @DataProvider(name = "invalidLoginData")
     public Object[][] invalidLoginData() {
-        return new Object[][] {
-            // Email sai, Pass đúng
-            {DataHelper.get("login.invalidEmail"), DataHelper.get("login.validPassword")},
-            // Email đúng, Pass sai
-            {DataHelper.get("login.validEmail"), DataHelper.get("login.invalidPassword")},
-            // Email sai, Pass sai
-            {DataHelper.get("login.invalidEmail"), DataHelper.get("login.invalidPassword")},
-            // Trống Email
-            {"", DataHelper.get("login.validPassword")},
-            // Trống Pass
-            {DataHelper.get("login.validEmail"), ""},
-            // Trống cả 2
-            {"", ""}
+        return new Object[][]{
+                {DataHelper.get("login.invalidEmail"), DataHelper.get("login.validPassword")},
+                {DataHelper.get("login.validEmail"), DataHelper.get("login.invalidPassword")},
+                {DataHelper.get("login.invalidEmail"), DataHelper.get("login.invalidPassword")},
+                {"", DataHelper.get("login.validPassword")},
+                {DataHelper.get("login.validEmail"), ""},
+                {"", ""}
         };
     }
 
-    @Test(priority = 3, description = "TC03-TC08 - Kiểm tra đăng nhập thất bại (DDT)", dataProvider = "invalidLoginData")
+    @Test(priority = 3, description = "TC03-TC08 — Login failure with invalid credentials (DDT)",
+            dataProvider = "invalidLoginData")
+    @Severity(SeverityLevel.CRITICAL)
     public void testLoginFailure(String email, String password) {
         LoginPage loginPage = getLoginPage();
-        
+
         if (!email.isEmpty()) loginPage.enterEmail(email);
         if (!password.isEmpty()) loginPage.enterPassword(password);
-        
         loginPage.clickLogin();
 
-        // Nếu có trường trống, thường URL không đổi hoặc có validation HTML5 (tùy app). 
-        // Trong trường hợp này, ta check chung xem có thông báo lỗi hiển thị không hoặc URL có giữ nguyên không
         if (email.isEmpty() || password.isEmpty()) {
             Assert.assertTrue(loginPage.getCurrentUrl().contains("authentication"),
-                    "Trang không được giữ nguyên khi để trống trường bắt buộc");
+                    "Should stay on login page when required fields are empty");
         } else {
             Assert.assertTrue(loginPage.isErrorMessageDisplayed(),
-                    "Thông báo lỗi không hiển thị khi nhập sai thông tin");
+                    "Error message should be displayed for invalid credentials");
         }
     }
 
-    @Test(priority = 9, description = "TC09 - Kiểm tra trường Password ẩn ký tự")
+    // ═══════════════════════ UI TESTS ═══════════════════════
+
+    @Test(priority = 9, description = "TC09 — Password field should be masked")
+    @Severity(SeverityLevel.MINOR)
     public void testPasswordFieldIsMasked() {
         LoginPage loginPage = getLoginPage();
         Assert.assertTrue(loginPage.isPasswordMasked(),
-                "Trường Password không ẩn ký tự (type != password)");
+                "Password field type should be 'password'");
     }
 
-    @Test(priority = 10, description = "TC10 - Kiểm tra nút Login hiển thị trên trang")
+    @Test(priority = 10, description = "TC10 — Login button should be visible")
+    @Severity(SeverityLevel.MINOR)
     public void testLoginButtonIsDisplayed() {
         LoginPage loginPage = getLoginPage();
-        Assert.assertTrue(loginPage.isLoginButtonDisplayed(), "Nút Login không hiển thị trên trang");
+        Assert.assertTrue(loginPage.isLoginButtonDisplayed(),
+                "Login button should be displayed on the page");
     }
 
-    @Test(priority = 11, description = "TC11 - Kiểm tra title trang Login")
+    @Test(priority = 11, description = "TC11 — Login page title should not be empty")
+    @Severity(SeverityLevel.MINOR)
     public void testLoginPageTitle() {
         LoginPage loginPage = getLoginPage();
         String title = loginPage.getPageTitle();
-        Assert.assertFalse(title.isEmpty(), "Title trang Login bị trống");
+
+        Assert.assertFalse(title.isEmpty(), "Login page title should not be empty");
         Assert.assertTrue(title.contains("Login"),
-                "Title trang không chứa từ 'Login'. Actual: " + title);
+                "Page title should contain 'Login'. Actual: " + title);
     }
 
-    @Test(priority = 12, description = "TC12 - Kiểm tra SQL Injection cơ bản")
+    // ═══════════════════════ SECURITY TESTS ═══════════════════════
+
+    @Test(priority = 12, description = "TC12 — SQL Injection should not bypass login")
+    @Severity(SeverityLevel.BLOCKER)
     public void testSqlInjection() {
         LoginPage loginPage = getLoginPage();
-        loginPage.performLogin(DataHelper.get("security.sqlInjectionPayload"), DataHelper.get("login.validPassword"));
+        loginPage.performLogin(
+                DataHelper.get("security.sqlInjectionPayload"),
+                DataHelper.get("login.validPassword"));
 
         Assert.assertFalse(loginPage.isDashboardDisplayed(),
-                "Hệ thống bị tấn công SQL Injection - Dashboard hiển thị bất hợp pháp");
+                "SQL Injection should not grant access to Dashboard");
     }
 
-    @Test(priority = 13, description = "TC13 - Kiểm tra XSS cơ bản")
+    @Test(priority = 13, description = "TC13 — XSS payload should not bypass login")
+    @Severity(SeverityLevel.BLOCKER)
     public void testXssAttack() {
         LoginPage loginPage = getLoginPage();
-        loginPage.performLogin(DataHelper.get("security.xssPayload"), DataHelper.get("login.validPassword"));
+        loginPage.performLogin(
+                DataHelper.get("security.xssPayload"),
+                DataHelper.get("login.validPassword"));
 
         Assert.assertFalse(loginPage.isDashboardDisplayed(),
-                "Hệ thống bị tấn công XSS - Dashboard hiển thị bất hợp pháp");
+                "XSS payload should not grant access to Dashboard");
     }
 }

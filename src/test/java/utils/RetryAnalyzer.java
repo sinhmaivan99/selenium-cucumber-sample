@@ -3,30 +3,33 @@ package utils;
 import org.testng.IRetryAnalyzer;
 import org.testng.ITestResult;
 
+/**
+ * Automatically retries failed tests up to a configurable number of times.
+ * Helps handle flaky tests caused by network latency or server lag.
+ */
 public class RetryAnalyzer implements IRetryAnalyzer {
-    
-    private int count = 0;
-    private static final int maxTry = 1; // Số lần retry tối đa (mặc định 1)
+
+    private int retryCount = 0;
+    private static final int MAX_RETRY = 1;
 
     @Override
-    public boolean retry(ITestResult iTestResult) {
-        if (!iTestResult.isSuccess()) { 
-            if (count < maxTry) {
-                count++;
-                iTestResult.setStatus(ITestResult.FAILURE);
-                LogHelper.warn("Retrying test " + iTestResult.getName() + " with status "
-                        + getResultStatusName(iTestResult.getStatus()) + " for the " + count + " time(s).");
-                return true; 
-            }
+    public boolean retry(ITestResult result) {
+        if (!result.isSuccess() && retryCount < MAX_RETRY) {
+            retryCount++;
+            LogHelper.warn("Retrying test '" + result.getName()
+                    + "' [" + getStatusName(result.getStatus()) + "] — attempt "
+                    + retryCount + "/" + MAX_RETRY);
+            return true;
         }
         return false;
     }
 
-    private String getResultStatusName(int status) {
-        String resultName = null;
-        if (status == 1) resultName = "SUCCESS";
-        if (status == 2) resultName = "FAILURE";
-        if (status == 3) resultName = "SKIP";
-        return resultName;
+    private String getStatusName(int status) {
+        return switch (status) {
+            case ITestResult.SUCCESS -> "SUCCESS";
+            case ITestResult.FAILURE -> "FAILURE";
+            case ITestResult.SKIP -> "SKIP";
+            default -> "UNKNOWN";
+        };
     }
 }

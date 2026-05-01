@@ -7,7 +7,13 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import utils.DataHelper;
 
+/**
+ * Page Object for the CRM Login page.
+ * Encapsulates all locators and business logic for login interactions.
+ * Uses fluent pattern — all action methods return {@code this} for chaining.
+ */
 public class LoginPage extends BasePage {
 
     @FindBy(id = "email")
@@ -31,37 +37,39 @@ public class LoginPage extends BasePage {
         super(driver, wait);
     }
 
-    @Step("Mở trang Login")
+    // ═══════════════════════ ACTIONS ═══════════════════════
+
+    @Step("Open Login page")
     public LoginPage open() {
-        navigateTo(utils.DataHelper.get("urls.login"));
+        navigateTo(DataHelper.get("urls.login"));
         return this;
     }
 
-    @Step("Nhập email: {email}")
+    @Step("Enter email: {email}")
     public LoginPage enterEmail(String email) {
         setText(emailInput, email);
         return this;
     }
 
-    @Step("Nhập password")
+    @Step("Enter password")
     public LoginPage enterPassword(String password) {
         setText(passwordInput, password);
         return this;
     }
 
-    @Step("Click nút Login")
+    @Step("Click Login button")
     public LoginPage clickLogin() {
         click(loginButton);
         return this;
     }
 
-    @Step("Tick checkbox Remember Me")
+    @Step("Tick Remember Me checkbox")
     public LoginPage tickRememberMe() {
         setCheckbox(rememberMeCheckbox, true);
         return this;
     }
 
-    @Step("Đăng nhập với email: {email}")
+    @Step("Login with email: {email}")
     public LoginPage performLogin(String email, String password) {
         enterEmail(email);
         enterPassword(password);
@@ -69,27 +77,29 @@ public class LoginPage extends BasePage {
         return this;
     }
 
-    @Step("Lấy thông báo lỗi")
+    // ═══════════════════════ ASSERTIONS / QUERIES ═══════════════════════
+
+    @Step("Get error message text")
     public String getErrorMessage() {
         return getText(errorMessage);
     }
 
-    @Step("Kiểm tra thông báo lỗi hiển thị")
+    @Step("Check if error message is displayed")
     public boolean isErrorMessageDisplayed() {
         return isDisplayed(errorMessage);
     }
 
-    @Step("Kiểm tra Dashboard hiển thị")
+    @Step("Check if Dashboard is displayed")
     public boolean isDashboardDisplayed() {
         return isDisplayed(dashboardHeading);
     }
 
-    @Step("Kiểm tra trường Password có ẩn ký tự")
+    @Step("Check if password field is masked")
     public boolean isPasswordMasked() {
         return "password".equals(getAttribute(passwordInput, "type"));
     }
 
-    @Step("Kiểm tra nút Login hiển thị")
+    @Step("Check if Login button is displayed")
     public boolean isLoginButtonDisplayed() {
         return isDisplayed(loginButton);
     }
