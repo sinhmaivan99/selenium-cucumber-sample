@@ -1,0 +1,19 @@
+{
+  "urls": {
+    "login": "https://crm.anhtester.com/admin/authentication",
+    "dashboard": "https://crm.anhtester.com/admin/"
+  },
+  "login": {
+    "validEmail": "admin@example.com",
+    "validPassword": "123456",
+    "invalidEmail": "wronguser@example.com",
+    "invalidPassword": "wrongpassword"
+  },
+  "messages": {
+    "errorInvalidCredentials": "Invalid email or password"
+  },
+  "security": {
+    "sqlInjectionPayload": "' OR 1=1 --",
+    "xssPayload": "<script>alert('xss')</script>"
+  }
+}
